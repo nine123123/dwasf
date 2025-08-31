@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ตัวช่วยแปลงไฟล์เป็น PDF + รวม PDF</title>
+  <meta name="description" content="แปลงรูป/ข้อความเป็น PDF และรวม PDF ทำงานในเบราว์เซอร์เต็มรูปแบบ" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div id="root"></div>
+
+  <script type="module">
+    import React, { useCallback, useMemo, useRef, useState } from "https://esm.sh/react@18";
+    import { createRoot } from "https://esm.sh/react-dom@18/client";
+    import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
+    import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      const len = bytes.byteLength || bytes.length;
+      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      for (let i = 0; i < len; i++) binary += String.fromCharCode(arr[i]);
+      return btoa(binary);
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    const ACCEPT = [
+      "application/pdf",
+      "image/*",
+      "text/plain",
+      "text/markdown",
+      "text/csv",
+      "text/html",
+      "text/*",
+    ].join(",");
+
+    const niceBytes = n => {
+      if (n == null) return "";
+      const units = ["B", "KB", "MB", "GB"]; let i = 0; let v = n;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return \`\${v.toFixed(v < 10 && i > 0 ? 1 : 0)} \${units[i]}\`;
+    };
+
+    function App() {
+      const [files, setFiles] = useState([]);
+      const [converted, setConverted] = useState([]); // {name, blob, size}
+      const [mergeList, setMergeList] = useState([]); // {type: 'converted'|'uploaded', idx|fileIndex}
+      const [busy, setBusy] = useState(false);
+      const [log, setLog] = useState([]);
+      const [fontFile, setFontFile] = useState(null);
+      const customFontNameRef = useRef("CustomFont");
+
+      const pushLog = useCallback(msg => setLog(prev => [msg, ...prev].slice(0, 200)), []);
+
+      const onPickFiles = useCallback(e => {
+        const f = Array.from(e.target.files || []);
+        setFiles(prev => [...prev, ...f]);
+      }, []);
+
+      const onDrop = useCallback(e => {
+        e.preventDefault();
+        const f = Array.from(e.dataTransfer.files || []);
+        setFiles(prev => [...prev, ...f]);
+      }, []);
+
+      const prevent = useCallback(e => e.preventDefault(), []);
+
+      const removeFile = idx => setFiles(prev => prev.filter((_, i) => i !== idx));
+      const clearFiles = () => setFiles([]);
+      const clearConverted = () => { setConverted([]); setMergeList([]); };
+
+      async function ensureCustomFont(pdf) {
+        if (!fontFile) return;
+        try {
+          const buf = await fontFile.arrayBuffer();
+          const b64 = bytesToBase64(new Uint8Array(buf));
+          const vfsName = fontFile.name || "custom.ttf";
+          pdf.addFileToVFS(vfsName, b64);
+          const fontName = customFontNameRef.current || "CustomFont";
+          pdf.addFont(vfsName, fontName, "normal");
+          pdf.setFont(fontName, "normal");
+        } catch (e) {
+          pushLog(\`ฝังฟอนต์ไม่สำเร็จ: \${e?.message || e}\`);
+        }
+      }
+
+      async function imageFileToPdf(file) {
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(fr.result);
+          fr.onerror = rej;
+          fr.readAsDataURL(file);
+        });
+        return await new Promise((res, rej) => {
+          const img = new Image();
+          img.onload = async () => {
+            const landscape = img.width >= img.height;
+            const pdf = new jsPDF({ orientation: landscape ? "l" : "p", unit: "pt", format: "a4" });
+            await ensureCustomFont(pdf);
+            const margin = 36;
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+            const scale = Math.min((pageW - margin * 2) / img.width, (pageH - margin * 2) / img.height);
+            const w = img.width * scale;
+            const h = img.height * scale;
+            const x = (pageW - w) / 2;
+            const y = (pageH - h) / 2;
+            pdf.addImage(dataUrl, file.type.includes("png") ? "PNG" : "JPEG", x, y, w, h);
+            const blob = pdf.output("blob");
+            res({ name: file.name.replace(/\.[^.]+$/, "") + ".pdf", blob, size: blob.size });
+          };
+          img.onerror = rej;
+          img.src = dataUrl;
+        });
+      }
+
+      async function textFileToPdf(file) {
+        const text = await file.text();
+        const pdf = new jsPDF({ unit: "pt", format: "a4" });
+        await ensureCustomFont(pdf);
+        const marginX = 40; const marginY = 56; const line = 18; const fontSize = 12;
+        pdf.setFontSize(fontSize);
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const maxW = pageW - marginX * 2;
+
+        const clean = text
+          .replace(/\r\n?/g, "\n")
+          .replace(/^# (.*)$/gm, "$1\n".toUpperCase())
+          .replace(/^## (.*)$/gm, "$1\n")
+          .replace(/^[-*] /gm, "• ");
+
+        const paragraphs = clean.split(/\n\n+/);
+        let y = marginY;
+        for (const p of paragraphs) {
+          const lines = pdf.splitTextToSize(p, maxW);
+          for (const ln of lines) {
+            if (y + line > pageH - marginY) { pdf.addPage(); y = marginY; }
+            pdf.text(ln, marginX, y);
+            y += line;
+          }
+          y += Math.round(line * 0.5);
+          if (y > pageH - marginY) { pdf.addPage(); y = marginY; }
+        }
+
+        const blob = pdf.output("blob");
+        return { name: file.name.replace(/\.[^.]+$/, "") + ".pdf", blob, size: blob.size };
+      }
+
+      async function passthroughPdf(file) {
+        const buf = await file.arrayBuffer();
+        return { name: file.name, blob: new Blob([buf], { type: "application/pdf" }), size: file.size };
+      }
+
+      function detectKind(file) {
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        if (file.type === "application/pdf" || ext === "pdf") return "pdf";
+        if (file.type.startsWith("image/") || ["png","jpg","jpeg","webp","bmp"].includes(ext)) return "image";
+        if (file.type.startsWith("text/") || ["txt","md","csv","log","html","htm"].includes(ext)) return "text";
+        return "unsupported";
+      }
+
+      async function convertOne(file) {
+        const kind = detectKind(file);
+        switch (kind) {
+          case "pdf": return await passthroughPdf(file);
+          case "image": return await imageFileToPdf(file);
+          case "text": return await textFileToPdf(file);
+          default:
+            throw new Error("ไฟล์ชนิดนี้ยังไม่รองรับแบบออฟไลน์ (เช่น DOCX/XLSX/PPTX)");
+        }
+      }
+
+      async function handleConvertSelected() {
+        if (!files.length) { pushLog("ยังไม่ได้เลือกไฟล์"); return; }
+        setBusy(true);
+        try {
+          const out = [];
+          for (const f of files) {
+            try {
+              pushLog(\`กำลังแปลง: \${f.name}\`);
+              const r = await convertOne(f);
+              out.push(r);
+            } catch (e) {
+              pushLog(\`แปลงไม่ได้: \${f.name} → \${e?.message || e}\`);
+            }
+          }
+          setConverted(prev => [...prev, ...out]);
+          pushLog(\`เสร็จแล้ว: แปลงสำเร็จ \${out.length} ไฟล์\`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function addConvertedToMerge(idx) {
+        setMergeList(prev => [...prev, { type: "converted", idx }]);
+      }
+
+      function addUploadedPdfToMerge() {
+        const items = files
+          .map((f, i) => ({ f, i }))
+          .filter(x => detectKind(x.f) === "pdf");
+        if (!items.length) { pushLog("ไม่มี PDF จากรายการไฟล์อัปโหลด"); return; }
+        setMergeList(prev => [
+          ...prev,
+          ...items.map(x => ({ type: "uploaded", fileIndex: x.i }))
+        ]);
+      }
+
+      function removeFromMerge(i) {
+        setMergeList(prev => prev.filter((_, idx) => idx !== i));
+      }
+
+      function moveMerge(i, dir) {
+        setMergeList(prev => {
+          const arr = prev.slice();
+          const j = i + dir;
+          if (j < 0 || j >= arr.length) return prev;
+          const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+          return arr;
+        });
+      }
+
+      async function buildMergePdf() {
+        if (!mergeList.length) { pushLog("ยังไม่ได้เลือกรายการสำหรับรวม"); return; }
+        setBusy(true);
+        try {
+          const out = await PDFDocument.create();
+          for (const item of mergeList) {
+            let srcBytes;
+            if (item.type === "converted") {
+              const obj = converted[item.idx];
+              srcBytes = new Uint8Array(await obj.blob.arrayBuffer());
+            } else if (item.type === "uploaded") {
+              const f = files[item.fileIndex];
+              srcBytes = new Uint8Array(await f.arrayBuffer());
+            }
+            const src = await PDFDocument.load(srcBytes);
+            const pages = await out.copyPages(src, src.getPageIndices());
+            pages.forEach(p => out.addPage(p));
+          }
+          const bytes = await out.save();
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          downloadBlob(blob, \`merged_\${Date.now()}.pdf\`);
+          pushLog("รวม PDF เรียบร้อย");
+        } catch (e) {
+          pushLog(\`รวมไฟล์ล้มเหลว: \${e?.message || e}\`);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      const unsupportedList = useMemo(() => files.filter(f => detectKind(f) === "unsupported"), [files]);
+
+      return (
+        React.createElement("div", { className: "min-h-screen w-full" },
+          React.createElement("div", { className: "mx-auto max-w-6xl px-4 py-8" },
+            React.createElement("header", { className: "mb-6" },
+              React.createElement("h1", { className: "text-2xl sm:text-3xl font-bold tracking-tight" }, "ตัวช่วยแปลงไฟล์เป็น PDF + รวม PDF"),
+              React.createElement("p", { className: "text-sm text-slate-600 mt-1" }, "ทำงานทั้งหมดในเบราว์เซอร์ เครื่องคุณไม่ต้องอัปโหลดขึ้นเซิร์ฟเวอร์")
+            ),
+            React.createElement("section", { className: "grid lg:grid-cols-3 gap-6 mb-8" },
+              React.createElement("div", { className: "lg:col-span-2" },
+                React.createElement("div", {
+                  onDragOver: prevent, onDragEnter: prevent, onDrop: onDrop,
+                  className: "border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-white shadow-sm"
+                },
+                  React.createElement("p", { className: "font-medium" }, "ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์"),
+                  React.createElement("p", { className: "text-xs text-slate-500" }, "รองรับ: PDF, รูปภาพ (PNG/JPG/WEBP), ข้อความ (TXT/MD/CSV/LOG/HTML เป็นข้อความธรรมดา)"),
+                  React.createElement("div", { className: "mt-4 flex items-center gap-3" },
+                    React.createElement("input", { id: "file", type: "file", multiple: true, accept: ACCEPT, onChange: onPickFiles,
+                      className: "block w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" }),
+                    React.createElement("button", { onClick: clearFiles, className: "px-3 py-2 text-sm rounded-xl bg-slate-100 hover:bg-slate-200" }, "ล้างรายการ")
+                  ),
+                  unsupportedList.length > 0 && React.createElement("div", { className: "mt-3 text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm" },
+                    "พบไฟล์ที่ยังไม่รองรับแบบออฟไลน์: ",
+                    unsupportedList.map(f => f.name).join(", "),
+                    ".\nไฟล์ตระกูลเอกสารสำนักงาน (DOCX/XLSX/PPTX) ต้องใช้บริการฝั่งเซิร์ฟเวอร์หรือแปลงเป็น PDF ก่อนแล้วค่อยอัปโหลดมารวมค่ะ/ครับ"
+                  )
+                ),
+                React.createElement("div", { className: "mt-4 bg-white border rounded-2xl shadow-sm" },
+                  React.createElement("div", { className: "px-4 py-2 border-b flex items-center justify-between" },
+                    React.createElement("h2", { className: "font-semibold" }, \`ไฟล์ที่เลือก (\${files.length})\`),
+                    React.createElement("div", { className: "flex gap-2" },
+                      React.createElement("button", { onClick: handleConvertSelected, disabled: busy || files.length === 0,
+                        className: "px-3 py-2 text-sm rounded-xl bg-indigo-600 text-white disabled:opacity-40" }, "แปลงเป็น PDF"),
+                      React.createElement("button", { onClick: addUploadedPdfToMerge, disabled: busy,
+                        className: "px-3 py-2 text-sm rounded-xl bg-emerald-600 text-white disabled:opacity-40" }, "เพิ่ม PDF ที่อัปโหลดเข้า Merge")
+                    )
+                  ),
+                  React.createElement("ul", { className: "divide-y max-h-60 overflow-auto" },
+                    files.length === 0
+                      ? React.createElement("li", { className: "px-4 py-8 text-center text-slate-400 text-sm" }, "ยังไม่มีไฟล์")
+                      : files.map((f, i) => React.createElement("li", { key: i, className: "px-4 py-2 flex items-center justify-between" },
+                          React.createElement("div", null,
+                            React.createElement("div", { className: "font-medium" }, f.name),
+                            React.createElement("div", { className: "text-xs text-slate-500" }, (f.type || "unknown") + " • " + niceBytes(f.size))
+                          ),
+                          React.createElement("div", { className: "flex items-center gap-2" },
+                            React.createElement("span", { className: "text-[10px] px-2 py-1 rounded-full bg-slate-100" }, detectKind(f)),
+                            React.createElement("button", { onClick: () => removeFile(i), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ลบ")
+                          )
+                        ))
+                  )
+                ),
+                React.createElement("div", { className: "mt-4 bg-white border rounded-2xl shadow-sm p-4" },
+                  React.createElement("div", { className: "flex items-center justify-between gap-3 flex-wrap" },
+                    React.createElement("div", null,
+                      React.createElement("div", { className: "font-semibold" }, "ฟอนต์ภาษาไทย (ตัวเลือก)"),
+                      React.createElement("p", { className: "text-xs text-slate-500" }, "หากไฟล์ข้อความมีภาษาไทย ให้เลือกไฟล์ฟอนต์ .ttf หรือ .otf เพื่อให้ PDF แสดงผลถูกต้อง")
+                    ),
+                    React.createElement("div", { className: "flex items-center gap-2" },
+                      React.createElement("input", { type: "file", accept: ".ttf,.otf", onChange: e => setFontFile(e.target.files?.[0] || null) })
+                    )
+                  ),
+                  fontFile && React.createElement("div", { className: "mt-2 text-xs text-slate-600" }, "ใช้ฟอนต์: ",
+                    React.createElement("span", { className: "font-medium" }, fontFile.name)
+                  )
+                )
+              ),
+              React.createElement("div", { className: "space-y-6" },
+                React.createElement("div", { className: "bg-white border rounded-2xl shadow-sm" },
+                  React.createElement("div", { className: "px-4 py-2 border-b flex items-center justify-between" },
+                    React.createElement("h2", { className: "font-semibold" }, \`ไฟล์ที่แปลงเสร็จ (\${converted.length})\`),
+                    React.createElement("button", { onClick: clearConverted, className: "px-3 py-2 text-sm rounded-xl bg-slate-100 hover:bg-slate-200" }, "ล้าง")
+                  ),
+                  React.createElement("ul", { className: "divide-y max-h-64 overflow-auto" },
+                    converted.length === 0
+                      ? React.createElement("li", { className: "px-4 py-8 text-center text-slate-400 text-sm" }, "ยังไม่มีไฟล์ที่แปลง")
+                      : converted.map((c, i) => React.createElement("li", { key: i, className: "px-4 py-2 flex items-center justify-between" },
+                          React.createElement("div", null,
+                            React.createElement("div", { className: "font-medium" }, c.name),
+                            React.createElement("div", { className: "text-xs text-slate-500" }, niceBytes(c.size))
+                          ),
+                          React.createElement("div", { className: "flex items-center gap-2" },
+                            React.createElement("button", { onClick: () => downloadBlob(c.blob, c.name), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ดาวน์โหลด"),
+                            React.createElement("button", { onClick: () => addConvertedToMerge(i), className: "px-2 py-1 text-xs rounded-lg bg-emerald-600 text-white" }, "เพิ่มเข้า Merge")
+                          )
+                        ))
+                  )
+                ),
+                React.createElement("div", { className: "bg-white border rounded-2xl shadow-sm" },
+                  React.createElement("div", { className: "px-4 py-2 border-b flex items-center justify-between" },
+                    React.createElement("h2", { className: "font-semibold" }, \`คิวรวม PDF (\${mergeList.length})\`),
+                    React.createElement("button", { onClick: buildMergePdf, disabled: busy || mergeList.length === 0,
+                      className: "px-3 py-2 text-sm rounded-xl bg-emerald-600 text-white disabled:opacity-40" }, "รวมและดาวน์โหลด")
+                  ),
+                  React.createElement("ul", { className: "divide-y max-h-64 overflow-auto" },
+                    mergeList.length === 0
+                      ? React.createElement("li", { className: "px-4 py-8 text-center text-slate-400 text-sm" }, "ยังไม่มีไฟล์ในคิวรวม")
+                      : mergeList.map((m, i) => {
+                          let label = "";
+                          if (m.type === "converted") label = converted[m.idx]?.name || "[แปลงแล้วหาย]";
+                          else if (m.type === "uploaded") label = files[m.fileIndex]?.name || "[ไฟล์หาย]";
+                          return React.createElement("li", { key: i, className: "px-4 py-2 flex items-center justify-between" },
+                            React.createElement("div", null,
+                              React.createElement("div", { className: "font-medium" }, label),
+                              React.createElement("div", { className: "text-xs text-slate-500" }, m.type)
+                            ),
+                            React.createElement("div", { className: "flex items-center gap-2" },
+                              React.createElement("button", { onClick: () => moveMerge(i, -1), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ขึ้น"),
+                              React.createElement("button", { onClick: () => moveMerge(i, 1), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ลง"),
+                              React.createElement("button", { onClick: () => removeFromMerge(i), className: "px-2 py-1 text-xs rounded-lg bg-rose-100 hover:bg-rose-200" }, "ลบ")
+                            )
+                          );
+                        })
+                  )
+                ),
+                React.createElement("div", { className: "bg-white border rounded-2xl shadow-sm p-4 text-xs text-slate-600" },
+                  React.createElement("div", { className: "font-semibold mb-1" }, "บันทึกสถานะ"),
+                  React.createElement("ul", { className: "space-y-1 max-h-40 overflow-auto" },
+                    log.length === 0
+                      ? React.createElement("li", { className: "text-slate-400" }, "ไม่มีข้อความ")
+                      : log.map((l, i) => React.createElement("li", { key: i, className: "leading-4" }, "• ", l))
+                  )
+                )
+              )
+            ),
+            React.createElement("section", { className: "mt-4 text-xs text-slate-500 space-y-2" },
+              React.createElement("p", null, "คำแนะนำ: ถ้าต้องการแปลงไฟล์เอกสารตระกูลออฟฟิศ (DOCX/XLSX/PPTX) ให้แปลงเป็น PDF จากโปรแกรมต้นทางก่อน หรือเพิ่มระบบฝั่งเซิร์ฟเวอร์เพื่อนำไปแปลงแล้วค่อยส่งกลับมาที่หน้านี้"),
+              React.createElement("details", { className: "bg-slate-100 rounded-xl p-3" },
+                React.createElement("summary", { className: "cursor-pointer font-medium" }, "ตัวอย่างแนวทางฝั่งเซิร์ฟเวอร์เพื่อแปลง DOCX/XLSX/PPTX → PDF"),
+                React.createElement("pre", { className: "mt-2 whitespace-pre-wrap text-[10px]" }, `# แนวคิดย่อ: ใช้ LibreOffice (soffice) ใน Docker หรือเครื่องเซิร์ฟเวอร์เพื่อแปลง แล้วให้ API ส่งไฟล์ PDF กลับมา
+# ตัวอย่างสคริปต์ Node.js ด้วย child_process (pseudo):
+
+import express from 'express';
+import multer from 'multer';
+import { execFile } from 'child_process';
+import fs from 'fs/promises';
+
+const app = express();
+const upload = multer({ dest: 'uploads/' });
+
+app.post('/convert', upload.single('file'), async (req, res) => {
+  try {
+    const src = req.file.path;
+    const outDir = 'converted';
+    await fs.mkdir(outDir, { recursive: true });
+    await new Promise((resolve, reject) => {
+      execFile('soffice', ['--headless','--convert-to','pdf','--outdir', outDir, src], (err) => err ? reject(err) : resolve());
+    });
+    const outPath = src.replace('uploads', 'converted') + '.pdf'; // หรือหาจากชื่อจริง
+    const pdf = await fs.readFile(outPath);
+    res.setHeader('Content-Type','application/pdf');
+    res.send(pdf);
+  } catch(e) { res.status(500).send(String(e)); }
+});
+
+app.listen(3000);`)
+              )
+            )
+          )
+        )
+      );
+    }
+
+    const root = createRoot(document.getElementById("root"));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
