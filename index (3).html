@@ -1,369 +1,143 @@
-import React, { useEffect, useMemo, useState } from "react";
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Graninfluencer — ตัวอย่าง (Standalone)</title>
+<style>
+:root{--brand:#0b5cab;--bg:#fff;--ink:#16202b;--muted:#4a6074}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:system-ui,-apple-system,'Noto Sans Thai',sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;font-size:16px}
+.container{max-width:1000px;margin:0 auto;padding:20px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--brand)}
+.controls{display:flex;gap:8px;align-items:center}
+button,input[type=range]{font-weight:700;border-radius:10px;padding:10px 12px;border:1px solid #d7e1ee;background:#fff;cursor:pointer}
+button:focus,input:focus{outline:3px solid #f5a800;outline-offset:3px}
+.hero{display:flex;gap:20px;align-items:center;margin:20px 0;padding:18px;border-radius:16px;background:linear-gradient(#f7fbff,transparent)}
+.hero-h{font-size:1.6rem;margin:0}
+.lead{color:var(--muted);margin:8px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:#fff;border:1px solid #e7eef8;padding:14px;border-radius:12px}
+.badge{display:inline-block;background:#eef6ff;padding:6px 10px;border-radius:999px;color:var(--brand);font-weight:700;margin-right:6px}
+.footer{margin-top:22px;color:var(--muted);font-size:.95rem}
+.hidden{display:none}
+.hc{background:#08101b;color:#eaf3ff}
+@media(max-width:600px){.hero{flex-direction:column;align-items:flex-start}.hero-h{font-size:1.3rem}}
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <header class="header">
+    <div class="brand">Graninfluencer</div>
+    <div class="controls" aria-label="เครื่องมือช่วยการเข้าถึง">
+      <button id="ttsBtn" aria-pressed="false">อ่านหน้านี้</button>
+      <label style="display:flex;align-items:center;gap:8px">
+        ขนาด
+        <input id="fontRange" type="range" min="90" max="130" value="100" />
+      </label>
+      <button id="hcBtn" aria-pressed="false">คอนทราสต์สูง</button>
+    </div>
+  </header>
 
-// Graninfluencer React MVP — single-file, Tailwind-based, accessibility-first
-// - Font size slider (90–130%)
-// - High-contrast mode
-// - Text-to-Speech for headings/lead
-// - Static demo data for courses and events
-// - Clean, responsive layout for Thai audience
+  <main>
+    <section class="hero" aria-labelledby="heroTitle">
+      <div>
+        <h1 id="heroTitle" class="hero-h">พื้นที่ให้ผู้สูงวัย <span style="background:#ffdca3">เรียนรู้</span> <span style="background:#ffdca3">แบ่งปัน</span> และ <span style="background:#ffdca3">มีรายได้</span></h1>
+        <p class="lead">คอร์สสั้นเข้าใจง่าย เนื้อหาตรวจสอบโดยผู้เชี่ยวชาญ พร้อมชุมชนที่ปลอดภัย</p>
+        <div>
+          <a href="#courses" style="padding:10px 14px;border-radius:12px;background:var(--brand);color:#fff;text-decoration:none;font-weight:700">เริ่มเรียนครั้งแรก</a>
+          <a href="#family" style="padding:10px 14px;margin-left:8px;border-radius:12px;border:2px solid var(--brand);text-decoration:none;font-weight:700;color:var(--brand)">ให้ลูกหลานช่วย</a>
+        </div>
+        <div style="margin-top:10px">
+          <span class="badge">ตรวจสอบโดยผู้เชี่ยวชาญ</span>
+          <span class="badge">รีวิวจากผู้สูงวัย</span>
+          <span class="badge">รองรับ PromptPay</span>
+        </div>
+      </div>
+      <div aria-hidden style="min-width:200px;height:120px;border-radius:12px;background:linear-gradient(#eaf4ff,#fff);display:flex;align-items:center;justify-content:center">
+        รูปตัวอย่าง
+      </div>
+    </section>
 
-const courses = [
+    <section id="courses" style="margin-top:18px">
+      <h2>คอร์สยอดนิยม</h2>
+      <div id="courseList" class="grid"></div>
+    </section>
+
+    <section id="community" style="margin-top:18px">
+      <h2>กิจกรรมที่กำลังจะมี</h2>
+      <div class="grid">
+        <div class="card"><strong>เวิร์กชอป “ถ่ายภาพด้วยมือถือ”</strong><div>เสาร์นี้ 10:00 น. ออนไลน์</div></div>
+        <div class="card"><strong>สนทนายามเย็น</strong><div>ทุกพุธ 18:30 น. กลุ่มไลน์</div></div>
+      </div>
+    </section>
+
+    <section id="family" style="margin-top:18px">
+      <h2>สำหรับลูกหลาน</h2>
+      <div class="card">
+        <ol>
+          <li>สมัครบัญชีด้วยเบอร์โทร</li>
+          <li>เปิดโหมดผู้เริ่มต้น และปรับขนาดตัวอักษร</li>
+          <li>ส่งคอร์สแรก “ใช้งานมือถืออย่างปลอดภัย”</li>
+        </ol>
+      </div>
+    </section>
+
+    <p class="footer">© <span id="year"></span> Graninfluencer — ตัวอย่างสาธิต</p>
+  </main>
+</div>
+
+<script>
+/* Embedded/demo data so file:// เปิดได้โดยไม่ต้อง server */
+const COURSES = [
   { title: "ใช้งานมือถืออย่างปลอดภัย", summary: "ตั้งรหัส กู้คืนไลน์ ระวังลิงก์หลอก", duration: "8 นาที" },
   { title: "เริ่มต้นถ่ายรูปด้วยมือถือ", summary: "โฟกัส แสง จัดองค์ประกอบง่ายๆ", duration: "6 นาที" },
-  { title: "โอนเงินด้วย PromptPay", summary: "โอนให้ถูกคน ตรวจสอบก่อนยืนยัน", duration: "5 นาที" },
+  { title: "โอนเงินด้วย PromptPay", summary: "โอนให้ถูกคน ตรวจสอบก่อนยืนยัน", duration: "5 นาที" }
 ];
 
-const events = [
-  { name: "เวิร์กชอป ‘ถ่ายภาพด้วยมือถือ’", time: "เสาร์นี้ 10:00 น. ออนไลน์", cta: "เตือนฉัน" },
-  { name: "สนทนายามเย็น", time: "ทุกพุธ 18:30 น. กลุ่มไลน์", cta: "เข้าร่วม" },
-];
-
-function useLocalStorage(key, initial) {
-  const [val, setVal] = useState(() => {
-    if (typeof window === "undefined") return initial;
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : initial;
-    } catch {
-      return initial;
-    }
+function renderCourses(){
+  const el = document.getElementById('courseList');
+  el.innerHTML = '';
+  COURSES.forEach(c=>{
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = '<h3 style="margin:0 0 6px 0">'+c.title+'</h3><div style="color:#4a6074">'+c.summary+'</div><div style="margin-top:10px"><strong>เวลาเรียน:</strong> '+c.duration+'</div><div style="margin-top:10px"><button onclick="alert(\\'เริ่มเรียน: '+c.title+'\\')">เริ่มเรียน</button></div>';
+    el.appendChild(d);
   });
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(val));
-    } catch {}
-  }, [key, val]);
-  return [val, setVal];
 }
 
-function Badge({ children }) {
-  return (
-    <span className="inline-block rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-900">
-      {children}
-    </span>
-  );
-}
+/* Controls */
+const fontRange = document.getElementById('fontRange');
+fontRange.addEventListener('input', e=> document.documentElement.style.fontSize = (16 * (e.target.value/100))+'px');
 
-function Card({ children, className = "" }) {
-  return (
-    <div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
-      {children}
-    </div>
-  );
-}
+const hcBtn = document.getElementById('hcBtn');
+hcBtn.addEventListener('click', ()=>{
+  document.body.classList.toggle('hc');
+  const on = document.body.classList.contains('hc');
+  hcBtn.setAttribute('aria-pressed', on);
+});
 
-function SectionTitle({ children }) {
-  return <h2 className="mb-3 text-2xl font-extrabold tracking-tight text-slate-900">{children}</h2>;
-}
+/* TTS */
+const ttsBtn = document.getElementById('ttsBtn');
+let speaking = false;
+ttsBtn.addEventListener('click', ()=>{
+  if(!('speechSynthesis' in window)){ alert('เบราว์เซอร์นี้ไม่รองรับการอ่านออกเสียง'); return; }
+  const synth = window.speechSynthesis;
+  if(speaking){ synth.cancel(); speaking=false; ttsBtn.textContent='อ่านหน้านี้'; ttsBtn.setAttribute('aria-pressed','false'); return; }
+  const text = [
+    document.getElementById('heroTitle').innerText,
+    ...Array.from(document.querySelectorAll('h2')).map(h=>h.innerText)
+  ].join('. ');
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'th-TH'; u.rate = 0.95;
+  u.onend = ()=>{ speaking=false; ttsBtn.textContent='อ่านหน้านี้'; ttsBtn.setAttribute('aria-pressed','false'); };
+  synth.cancel(); synth.speak(u); speaking=true; ttsBtn.textContent='หยุดการอ่าน'; ttsBtn.setAttribute('aria-pressed','true');
+});
 
-export default function GraninfluencerApp() {
-  const [fontPct, setFontPct] = useLocalStorage("pref:base", 100);
-  const [hc, setHc] = useLocalStorage("pref:hc", false);
-  const [speaking, setSpeaking] = useState(false);
+/* Year */
+document.getElementById('year').textContent = new Date().getFullYear();
 
-  useEffect(() => {
-    document.title = "Graninfluencer — เรียนรู้ แบ่งปัน มีรายได้";
-  }, []);
-
-  const year = useMemo(() => new Date().getFullYear(), []);
-
-  function handleSpeak() {
-    if (typeof window === "undefined") return;
-    const synth = window.speechSynthesis;
-    if (!synth) {
-      alert("เบราว์เซอร์นี้ยังไม่รองรับการอ่านออกเสียง");
-      return;
-    }
-    const textParts = [
-      "พื้นที่ให้ผู้สูงวัย เรียนรู้ แบ่งปัน และมีรายได้",
-      "คอร์สสั้นเข้าใจง่าย เนื้อหาตรวจสอบโดยผู้เชี่ยวชาญ พร้อมชุมชนที่ปลอดภัย และตัวช่วยการเข้าถึง",
-      "พันธมิตรที่ไว้วางใจ",
-      "ใช้งานง่าย เหมาะกับทุกระดับ",
-      "คอร์สยอดนิยม",
-      "กิจกรรมที่กำลังจะมี",
-      "เรื่องเล่าความสำเร็จ",
-      "สำหรับลูกหลาน",
-      "คำถามที่พบบ่อย",
-      "ต้องการความช่วยเหลือ",
-    ];
-    const utter = new SpeechSynthesisUtterance(textParts.join(". "));
-    utter.lang = "th-TH";
-    utter.rate = 0.95;
-    utter.pitch = 1;
-    synth.cancel();
-    setSpeaking(true);
-    utter.onend = () => setSpeaking(false);
-    synth.speak(utter);
-  }
-
-  function stopSpeak() {
-    if (typeof window === "undefined") return;
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    synth.cancel();
-    setSpeaking(false);
-  }
-
-  return (
-    <div className={hc ? "hc bg-slate-900 text-slate-100" : "bg-white text-slate-900"} style={{ fontSize: `${fontPct}%` }}>
-      {/* Skip link */}
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:rounded-lg focus:bg-black focus:px-3 focus:py-2 focus:text-white">
-        ข้ามไปยังเนื้อหา
-      </a>
-
-      {/* Header */}
-      <header className={(hc ? "bg-slate-950/80" : "bg-white/80") + " sticky top-0 z-50 backdrop-blur border-b border-slate-200"}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <a href="#" className="flex items-center gap-2 font-extrabold text-slate-900" aria-label="หน้าแรก Graninfluencer">
-            <svg width="28" height="28" viewBox="0 0 24 24" className="text-blue-700" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" className="fill-current opacity-15" />
-              <path d="M7 13h10M7 9h7" className="stroke-current" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span>Graninfluencer</span>
-          </a>
-          <nav aria-label="เมนูหลัก" className="hidden gap-2 md:flex">
-            {[
-              ["คอร์ส", "#courses"],
-              ["ชุมชน", "#community"],
-              ["เรื่องเล่าความสำเร็จ", "#stories"],
-              ["คำถามที่พบบ่อย", "#faq"],
-              ["ช่วยเหลือ", "#help"],
-            ].map(([label, href]) => (
-              <a key={href} href={href} className="rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                {label}
-              </a>
-            ))}
-          </nav>
-          <div className="flex flex-wrap items-center gap-2" aria-label="เครื่องมือช่วยการเข้าถึง">
-            <button
-              onClick={() => (speaking ? stopSpeak() : handleSpeak())}
-              aria-pressed={speaking}
-              className="rounded-xl border border-slate-300 px-3 py-2 font-bold hover:bg-slate-100"
-            >
-              {speaking ? "หยุดการอ่าน" : "อ่านหน้านี้"}
-            </button>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              ขนาดตัวอักษร
-              <input
-                type="range"
-                min={90}
-                max={130}
-                value={fontPct}
-                onChange={(e) => setFontPct(parseInt(e.target.value))}
-                aria-valuemin={90}
-                aria-valuemax={130}
-                aria-valuenow={fontPct}
-                className="accent-blue-600"
-              />
-            </label>
-            <button
-              onClick={() => setHc(!hc)}
-              aria-pressed={hc}
-              className="rounded-xl border border-slate-300 px-3 py-2 font-bold hover:bg-slate-100"
-            >
-              คอนทราสต์สูง
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="bg-gradient-to-b from-blue-50 to-transparent" id="hero">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-6 px-4 py-10 md:grid-cols-2">
-          <div>
-            <h1 className="mb-2 text-3xl font-extrabold leading-tight md:text-4xl">
-              พื้นที่ให้ผู้สูงวัย <span className="bg-amber-200">เรียนรู้</span> <span className="bg-amber-200">แบ่งปัน</span> และ <span className="bg-amber-200">มีรายได้</span>
-            </h1>
-            <p className="mb-4 text-lg text-slate-600">
-              คอร์สสั้นเข้าใจง่าย เนื้อหาตรวจสอบโดยผู้เชี่ยวชาญ พร้อมชุมชนที่ปลอดภัย และตัวช่วยการเข้าถึง
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <a href="#courses" className="rounded-2xl bg-blue-700 px-4 py-3 font-extrabold text-white shadow hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-amber-400">เริ่มเรียนครั้งแรก</a>
-              <a href="#family" className="rounded-2xl border border-blue-700 px-4 py-3 font-extrabold text-blue-800 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-amber-400">ให้ลูกหลานช่วย</a>
-            </div>
-            <ul className="mt-4 flex flex-wrap gap-2">
-              <li><Badge>ตรวจสอบโดยผู้เชี่ยวชาญ</Badge></li>
-              <li><Badge>รีวิวจากผู้สูงวัยจริง</Badge></li>
-              <li><Badge>รองรับ PromptPay</Badge></li>
-            </ul>
-          </div>
-          <div aria-hidden>
-            <div className="relative h-56 w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:h-72">
-              <div className="absolute inset-0 -z-10 rounded-3xl bg-blue-100/50" />
-              <svg viewBox="0 0 240 200" className="h-full w-full text-blue-900/70">
-                <rect x="10" y="30" width="220" height="140" rx="12" fill="currentColor" opacity="0.08"></rect>
-                <circle cx="70" cy="100" r="24" fill="currentColor" opacity="0.2"></circle>
-                <rect x="110" y="80" width="90" height="12" rx="6" fill="currentColor" opacity="0.25"></rect>
-                <rect x="110" y="100" width="70" height="12" rx="6" fill="currentColor" opacity="0.18"></rect>
-                <rect x="110" y="120" width="60" height="12" rx="6" fill="currentColor" opacity="0.12"></rect>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Partners */}
-      <section className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>พันธมิตรที่ไว้วางใจ</SectionTitle>
-          <div className="flex flex-wrap items-center gap-3">
-            {["สมาคมผู้สูงอายุ", "โรงพยาบาลใจดี", "สถาบันทักษะดิจิทัล"].map((x) => (
-              <span key={x} className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-2 text-slate-600">
-                {x}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>ใช้งานง่าย เหมาะกับทุกระดับ</SectionTitle>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <div className="text-2xl" aria-hidden>🎓</div>
-              <h3 className="mb-1 text-xl font-extrabold">คอร์สสั้น 5–10 นาที</h3>
-              <p className="text-slate-600">อธิบายทีละขั้น เข้าใจได้โดยไม่ต้องมีพื้นฐาน พร้อมปุ่มอ่านให้ฟัง</p>
-            </Card>
-            <Card>
-              <div className="text-2xl" aria-hidden>💬</div>
-              <h3 className="mb-1 text-xl font-extrabold">ชุมชนปลอดภัย</h3>
-              <p className="text-slate-600">พื้นที่พูดคุย แบ่งปัน และกิจกรรมรายสัปดาห์ ลดความเหงา เพิ่มเพื่อนใหม่</p>
-            </Card>
-            <Card>
-              <div className="text-2xl" aria-hidden>💼</div>
-              <h3 className="mb-1 text-xl font-extrabold">โอกาสสร้างรายได้</h3>
-              <p className="text-slate-600">งานเล็กเหมาะกับผู้สูงวัย เช่น รีวิวสินค้า ถ่ายทอดประสบการณ์ สอนพื้นฐาน</p>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Courses */}
-      <section id="courses" className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>คอร์สยอดนิยม</SectionTitle>
-          <div className="grid gap-4 md:grid-cols-3" aria-live="polite">
-            {courses.map((c) => (
-              <Card key={c.title} className="flex flex-col justify-between">
-                <div>
-                  <h3 className="mb-1 text-xl font-extrabold">{c.title}</h3>
-                  <p className="mb-2 text-slate-600">{c.summary}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-500"><strong>เวลาเรียน:</strong> {c.duration}</p>
-                  <button className="rounded-xl bg-blue-700 px-3 py-2 font-bold text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-amber-400">
-                    เริ่มเรียน
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
-          <p className="mt-4 text-center">
-            <a href="#faq" className="rounded-xl border border-blue-700 px-4 py-2 font-extrabold text-blue-800 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-amber-400">ดูวิธีเริ่มต้นภายใน 5 นาที</a>
-          </p>
-        </div>
-      </section>
-
-      {/* Community */}
-      <section id="community" className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>กิจกรรมที่กำลังจะมี</SectionTitle>
-          <div className="grid gap-3">
-            {events.map((e) => (
-              <div key={e.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div>
-                  <h3 className="text-lg font-extrabold">{e.name}</h3>
-                  <p className="text-slate-600">{e.time}</p>
-                </div>
-                <button className="rounded-xl border border-slate-300 px-3 py-2 font-bold hover:bg-slate-50">
-                  {e.cta}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stories */}
-      <section id="stories" className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>เรื่องเล่าความสำเร็จ</SectionTitle>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <h3 className="mb-1 text-xl font-extrabold">คุณสมศรีเริ่มจากศูนย์ สู่วิดีโอแรก 1,200 วิว</h3>
-              <p className="text-slate-600">เรียนคอร์สสั้น 3 บทและขอคำแนะนำจากอาสา ใช้เวลาเพียง 2 สัปดาห์</p>
-            </Card>
-            <Card>
-              <h3 className="mb-1 text-xl font-extrabold">ลุงชัยรีวิวสินค้าได้ค่าตอบแทนแรก</h3>
-              <p className="text-slate-600">ทำภารกิจ “รีวิวซื่อสัตย์” ผ่านเกณฑ์ ตรวจสอบโดยทีมและผู้ใช้จริง</p>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Family */}
-      <section id="family" className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>สำหรับลูกหลาน</SectionTitle>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <h3 className="mb-2 text-xl font-extrabold">เริ่มอย่างไร</h3>
-              <ol className="list-decimal space-y-1 pl-5 text-slate-700">
-                <li>สมัครบัญชีให้ผู้สูงวัยด้วยเบอร์โทร</li>
-                <li>เปิดโหมดผู้เริ่มต้น และปรับขนาดตัวอักษร</li>
-                <li>ส่งคอร์สแรก “ใช้งานมือถืออย่างปลอดภัย”</li>
-              </ol>
-            </Card>
-            <Card>
-              <h3 className="mb-2 text-xl font-extrabold">การชำระเงินที่ปลอดภัย</h3>
-              <p className="text-slate-600">รองรับ PromptPay โอนผ่านธนาคาร และเก็บเงินปลายทางสำหรับสินค้าบางรายการ</p>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section id="faq" className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>คำถามที่พบบ่อย</SectionTitle>
-          <div className="space-y-3">
-            <details className="rounded-2xl border border-slate-200 bg-white p-4">
-              <summary className="cursor-pointer font-extrabold">ถ้าอ่านยากมาก ทำอย่างไร</summary>
-              <p className="pt-2 text-slate-600">เลื่อน “ขนาดตัวอักษร” ที่มุมขวาบน หรือกด “คอนทราสต์สูง” เพื่อสีที่ชัดขึ้น</p>
-            </details>
-            <details className="rounded-2xl border border-slate-200 bg-white p-4">
-              <summary className="cursor-pointer font-extrabold">ถ้าอยากให้เว็บอ่านให้ฟัง</summary>
-              <p className="pt-2 text-slate-600">กดปุ่ม “อ่านหน้านี้” ระบบจะอ่านหัวข้อและคำบรรยายหลักให้ฟัง</p>
-            </details>
-            <details className="rounded-2xl border border-slate-200 bg-white p-4">
-              <summary className="cursor-pointer font-extrabold">เว็บนี้ปลอดภัยไหม</summary>
-              <p className="pt-2 text-slate-600">เราใช้ HTTPS และแสดงข้อมูลผู้ติดต่อชัดเจน หากไม่มั่นใจ เลือกชำระแบบ PromptPay หรือให้ลูกหลานช่วย</p>
-            </details>
-          </div>
-        </div>
-      </section>
-
-      {/* Help */}
-      <section id="help" className="py-8">
-        <div className="mx-auto max-w-6xl px-4">
-          <SectionTitle>ต้องการความช่วยเหลือ</SectionTitle>
-          <p className="text-slate-600">โทร 02-000-0000 ทุกวัน 9:00–18:00 หรือแอดไลน์ @graninfluencer</p>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className={(hc ? "bg-slate-950" : "bg-slate-50") + " border-t border-slate-200"}>
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-slate-600">
-          <p>© {year} Graninfluencer — สร้างพื้นที่ปลอดภัยสำหรับผู้สูงวัย</p>
-          <ul className="flex list-none gap-3">
-            <li>PromptPay</li>
-            <li>โอนผ่านธนาคาร</li>
-            <li>เก็บเงินปลายทาง</li>
-          </ul>
-        </div>
-      </footer>
-    </div>
-  );
-}
+renderCourses();
+</script>
+</body>
+</html>
