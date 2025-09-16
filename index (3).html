@@ -1,433 +1,369 @@
-<!doctype html>
-<html lang="th">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ตัวช่วยแปลงไฟล์เป็น PDF + รวม PDF</title>
-  <meta name="description" content="แปลงรูป/ข้อความเป็น PDF และรวม PDF ทำงานในเบราว์เซอร์เต็มรูปแบบ" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E" />
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-50 text-slate-900">
-  <div id="root"></div>
+import React, { useEffect, useMemo, useState } from "react";
 
-  <script type="module">
-    import React, { useCallback, useMemo, useRef, useState } from "https://esm.sh/react@18";
-    import { createRoot } from "https://esm.sh/react-dom@18/client";
-    import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
-    import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
+// Graninfluencer React MVP — single-file, Tailwind-based, accessibility-first
+// - Font size slider (90–130%)
+// - High-contrast mode
+// - Text-to-Speech for headings/lead
+// - Static demo data for courses and events
+// - Clean, responsive layout for Thai audience
 
-    function bytesToBase64(bytes) {
-      let binary = "";
-      const len = bytes.byteLength || bytes.length;
-      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      for (let i = 0; i < len; i++) binary += String.fromCharCode(arr[i]);
-      return btoa(binary);
+const courses = [
+  { title: "ใช้งานมือถืออย่างปลอดภัย", summary: "ตั้งรหัส กู้คืนไลน์ ระวังลิงก์หลอก", duration: "8 นาที" },
+  { title: "เริ่มต้นถ่ายรูปด้วยมือถือ", summary: "โฟกัส แสง จัดองค์ประกอบง่ายๆ", duration: "6 นาที" },
+  { title: "โอนเงินด้วย PromptPay", summary: "โอนให้ถูกคน ตรวจสอบก่อนยืนยัน", duration: "5 นาที" },
+];
+
+const events = [
+  { name: "เวิร์กชอป ‘ถ่ายภาพด้วยมือถือ’", time: "เสาร์นี้ 10:00 น. ออนไลน์", cta: "เตือนฉัน" },
+  { name: "สนทนายามเย็น", time: "ทุกพุธ 18:30 น. กลุ่มไลน์", cta: "เข้าร่วม" },
+];
+
+function useLocalStorage(key, initial) {
+  const [val, setVal] = useState(() => {
+    if (typeof window === "undefined") return initial;
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : initial;
+    } catch {
+      return initial;
     }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+    } catch {}
+  }, [key, val]);
+  return [val, setVal];
+}
 
-    function downloadBlob(blob, filename) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+function Badge({ children }) {
+  return (
+    <span className="inline-block rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-900">
+      {children}
+    </span>
+  );
+}
+
+function Card({ children, className = "" }) {
+  return (
+    <div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ children }) {
+  return <h2 className="mb-3 text-2xl font-extrabold tracking-tight text-slate-900">{children}</h2>;
+}
+
+export default function GraninfluencerApp() {
+  const [fontPct, setFontPct] = useLocalStorage("pref:base", 100);
+  const [hc, setHc] = useLocalStorage("pref:hc", false);
+  const [speaking, setSpeaking] = useState(false);
+
+  useEffect(() => {
+    document.title = "Graninfluencer — เรียนรู้ แบ่งปัน มีรายได้";
+  }, []);
+
+  const year = useMemo(() => new Date().getFullYear(), []);
+
+  function handleSpeak() {
+    if (typeof window === "undefined") return;
+    const synth = window.speechSynthesis;
+    if (!synth) {
+      alert("เบราว์เซอร์นี้ยังไม่รองรับการอ่านออกเสียง");
+      return;
     }
+    const textParts = [
+      "พื้นที่ให้ผู้สูงวัย เรียนรู้ แบ่งปัน และมีรายได้",
+      "คอร์สสั้นเข้าใจง่าย เนื้อหาตรวจสอบโดยผู้เชี่ยวชาญ พร้อมชุมชนที่ปลอดภัย และตัวช่วยการเข้าถึง",
+      "พันธมิตรที่ไว้วางใจ",
+      "ใช้งานง่าย เหมาะกับทุกระดับ",
+      "คอร์สยอดนิยม",
+      "กิจกรรมที่กำลังจะมี",
+      "เรื่องเล่าความสำเร็จ",
+      "สำหรับลูกหลาน",
+      "คำถามที่พบบ่อย",
+      "ต้องการความช่วยเหลือ",
+    ];
+    const utter = new SpeechSynthesisUtterance(textParts.join(". "));
+    utter.lang = "th-TH";
+    utter.rate = 0.95;
+    utter.pitch = 1;
+    synth.cancel();
+    setSpeaking(true);
+    utter.onend = () => setSpeaking(false);
+    synth.speak(utter);
+  }
 
-    const ACCEPT = [
-      "application/pdf",
-      "image/*",
-      "text/plain",
-      "text/markdown",
-      "text/csv",
-      "text/html",
-      "text/*",
-    ].join(",");
+  function stopSpeak() {
+    if (typeof window === "undefined") return;
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    synth.cancel();
+    setSpeaking(false);
+  }
 
-    const niceBytes = n => {
-      if (n == null) return "";
-      const units = ["B", "KB", "MB", "GB"]; let i = 0; let v = n;
-      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-      return \`\${v.toFixed(v < 10 && i > 0 ? 1 : 0)} \${units[i]}\`;
-    };
+  return (
+    <div className={hc ? "hc bg-slate-900 text-slate-100" : "bg-white text-slate-900"} style={{ fontSize: `${fontPct}%` }}>
+      {/* Skip link */}
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:rounded-lg focus:bg-black focus:px-3 focus:py-2 focus:text-white">
+        ข้ามไปยังเนื้อหา
+      </a>
 
-    function App() {
-      const [files, setFiles] = useState([]);
-      const [converted, setConverted] = useState([]); // {name, blob, size}
-      const [mergeList, setMergeList] = useState([]); // {type: 'converted'|'uploaded', idx|fileIndex}
-      const [busy, setBusy] = useState(false);
-      const [log, setLog] = useState([]);
-      const [fontFile, setFontFile] = useState(null);
-      const customFontNameRef = useRef("CustomFont");
+      {/* Header */}
+      <header className={(hc ? "bg-slate-950/80" : "bg-white/80") + " sticky top-0 z-50 backdrop-blur border-b border-slate-200"}>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <a href="#" className="flex items-center gap-2 font-extrabold text-slate-900" aria-label="หน้าแรก Graninfluencer">
+            <svg width="28" height="28" viewBox="0 0 24 24" className="text-blue-700" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" className="fill-current opacity-15" />
+              <path d="M7 13h10M7 9h7" className="stroke-current" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span>Graninfluencer</span>
+          </a>
+          <nav aria-label="เมนูหลัก" className="hidden gap-2 md:flex">
+            {[
+              ["คอร์ส", "#courses"],
+              ["ชุมชน", "#community"],
+              ["เรื่องเล่าความสำเร็จ", "#stories"],
+              ["คำถามที่พบบ่อย", "#faq"],
+              ["ช่วยเหลือ", "#help"],
+            ].map(([label, href]) => (
+              <a key={href} href={href} className="rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {label}
+              </a>
+            ))}
+          </nav>
+          <div className="flex flex-wrap items-center gap-2" aria-label="เครื่องมือช่วยการเข้าถึง">
+            <button
+              onClick={() => (speaking ? stopSpeak() : handleSpeak())}
+              aria-pressed={speaking}
+              className="rounded-xl border border-slate-300 px-3 py-2 font-bold hover:bg-slate-100"
+            >
+              {speaking ? "หยุดการอ่าน" : "อ่านหน้านี้"}
+            </button>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              ขนาดตัวอักษร
+              <input
+                type="range"
+                min={90}
+                max={130}
+                value={fontPct}
+                onChange={(e) => setFontPct(parseInt(e.target.value))}
+                aria-valuemin={90}
+                aria-valuemax={130}
+                aria-valuenow={fontPct}
+                className="accent-blue-600"
+              />
+            </label>
+            <button
+              onClick={() => setHc(!hc)}
+              aria-pressed={hc}
+              className="rounded-xl border border-slate-300 px-3 py-2 font-bold hover:bg-slate-100"
+            >
+              คอนทราสต์สูง
+            </button>
+          </div>
+        </div>
+      </header>
 
-      const pushLog = useCallback(msg => setLog(prev => [msg, ...prev].slice(0, 200)), []);
+      {/* Hero */}
+      <section className="bg-gradient-to-b from-blue-50 to-transparent" id="hero">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-6 px-4 py-10 md:grid-cols-2">
+          <div>
+            <h1 className="mb-2 text-3xl font-extrabold leading-tight md:text-4xl">
+              พื้นที่ให้ผู้สูงวัย <span className="bg-amber-200">เรียนรู้</span> <span className="bg-amber-200">แบ่งปัน</span> และ <span className="bg-amber-200">มีรายได้</span>
+            </h1>
+            <p className="mb-4 text-lg text-slate-600">
+              คอร์สสั้นเข้าใจง่าย เนื้อหาตรวจสอบโดยผู้เชี่ยวชาญ พร้อมชุมชนที่ปลอดภัย และตัวช่วยการเข้าถึง
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a href="#courses" className="rounded-2xl bg-blue-700 px-4 py-3 font-extrabold text-white shadow hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-amber-400">เริ่มเรียนครั้งแรก</a>
+              <a href="#family" className="rounded-2xl border border-blue-700 px-4 py-3 font-extrabold text-blue-800 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-amber-400">ให้ลูกหลานช่วย</a>
+            </div>
+            <ul className="mt-4 flex flex-wrap gap-2">
+              <li><Badge>ตรวจสอบโดยผู้เชี่ยวชาญ</Badge></li>
+              <li><Badge>รีวิวจากผู้สูงวัยจริง</Badge></li>
+              <li><Badge>รองรับ PromptPay</Badge></li>
+            </ul>
+          </div>
+          <div aria-hidden>
+            <div className="relative h-56 w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:h-72">
+              <div className="absolute inset-0 -z-10 rounded-3xl bg-blue-100/50" />
+              <svg viewBox="0 0 240 200" className="h-full w-full text-blue-900/70">
+                <rect x="10" y="30" width="220" height="140" rx="12" fill="currentColor" opacity="0.08"></rect>
+                <circle cx="70" cy="100" r="24" fill="currentColor" opacity="0.2"></circle>
+                <rect x="110" y="80" width="90" height="12" rx="6" fill="currentColor" opacity="0.25"></rect>
+                <rect x="110" y="100" width="70" height="12" rx="6" fill="currentColor" opacity="0.18"></rect>
+                <rect x="110" y="120" width="60" height="12" rx="6" fill="currentColor" opacity="0.12"></rect>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      const onPickFiles = useCallback(e => {
-        const f = Array.from(e.target.files || []);
-        setFiles(prev => [...prev, ...f]);
-      }, []);
+      {/* Partners */}
+      <section className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>พันธมิตรที่ไว้วางใจ</SectionTitle>
+          <div className="flex flex-wrap items-center gap-3">
+            {["สมาคมผู้สูงอายุ", "โรงพยาบาลใจดี", "สถาบันทักษะดิจิทัล"].map((x) => (
+              <span key={x} className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-2 text-slate-600">
+                {x}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      const onDrop = useCallback(e => {
-        e.preventDefault();
-        const f = Array.from(e.dataTransfer.files || []);
-        setFiles(prev => [...prev, ...f]);
-      }, []);
+      {/* Features */}
+      <section className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>ใช้งานง่าย เหมาะกับทุกระดับ</SectionTitle>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <div className="text-2xl" aria-hidden>🎓</div>
+              <h3 className="mb-1 text-xl font-extrabold">คอร์สสั้น 5–10 นาที</h3>
+              <p className="text-slate-600">อธิบายทีละขั้น เข้าใจได้โดยไม่ต้องมีพื้นฐาน พร้อมปุ่มอ่านให้ฟัง</p>
+            </Card>
+            <Card>
+              <div className="text-2xl" aria-hidden>💬</div>
+              <h3 className="mb-1 text-xl font-extrabold">ชุมชนปลอดภัย</h3>
+              <p className="text-slate-600">พื้นที่พูดคุย แบ่งปัน และกิจกรรมรายสัปดาห์ ลดความเหงา เพิ่มเพื่อนใหม่</p>
+            </Card>
+            <Card>
+              <div className="text-2xl" aria-hidden>💼</div>
+              <h3 className="mb-1 text-xl font-extrabold">โอกาสสร้างรายได้</h3>
+              <p className="text-slate-600">งานเล็กเหมาะกับผู้สูงวัย เช่น รีวิวสินค้า ถ่ายทอดประสบการณ์ สอนพื้นฐาน</p>
+            </Card>
+          </div>
+        </div>
+      </section>
 
-      const prevent = useCallback(e => e.preventDefault(), []);
+      {/* Courses */}
+      <section id="courses" className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>คอร์สยอดนิยม</SectionTitle>
+          <div className="grid gap-4 md:grid-cols-3" aria-live="polite">
+            {courses.map((c) => (
+              <Card key={c.title} className="flex flex-col justify-between">
+                <div>
+                  <h3 className="mb-1 text-xl font-extrabold">{c.title}</h3>
+                  <p className="mb-2 text-slate-600">{c.summary}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-500"><strong>เวลาเรียน:</strong> {c.duration}</p>
+                  <button className="rounded-xl bg-blue-700 px-3 py-2 font-bold text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-amber-400">
+                    เริ่มเรียน
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+          <p className="mt-4 text-center">
+            <a href="#faq" className="rounded-xl border border-blue-700 px-4 py-2 font-extrabold text-blue-800 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-amber-400">ดูวิธีเริ่มต้นภายใน 5 นาที</a>
+          </p>
+        </div>
+      </section>
 
-      const removeFile = idx => setFiles(prev => prev.filter((_, i) => i !== idx));
-      const clearFiles = () => setFiles([]);
-      const clearConverted = () => { setConverted([]); setMergeList([]); };
+      {/* Community */}
+      <section id="community" className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>กิจกรรมที่กำลังจะมี</SectionTitle>
+          <div className="grid gap-3">
+            {events.map((e) => (
+              <div key={e.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <div>
+                  <h3 className="text-lg font-extrabold">{e.name}</h3>
+                  <p className="text-slate-600">{e.time}</p>
+                </div>
+                <button className="rounded-xl border border-slate-300 px-3 py-2 font-bold hover:bg-slate-50">
+                  {e.cta}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      async function ensureCustomFont(pdf) {
-        if (!fontFile) return;
-        try {
-          const buf = await fontFile.arrayBuffer();
-          const b64 = bytesToBase64(new Uint8Array(buf));
-          const vfsName = fontFile.name || "custom.ttf";
-          pdf.addFileToVFS(vfsName, b64);
-          const fontName = customFontNameRef.current || "CustomFont";
-          pdf.addFont(vfsName, fontName, "normal");
-          pdf.setFont(fontName, "normal");
-        } catch (e) {
-          pushLog(\`ฝังฟอนต์ไม่สำเร็จ: \${e?.message || e}\`);
-        }
-      }
+      {/* Stories */}
+      <section id="stories" className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>เรื่องเล่าความสำเร็จ</SectionTitle>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <h3 className="mb-1 text-xl font-extrabold">คุณสมศรีเริ่มจากศูนย์ สู่วิดีโอแรก 1,200 วิว</h3>
+              <p className="text-slate-600">เรียนคอร์สสั้น 3 บทและขอคำแนะนำจากอาสา ใช้เวลาเพียง 2 สัปดาห์</p>
+            </Card>
+            <Card>
+              <h3 className="mb-1 text-xl font-extrabold">ลุงชัยรีวิวสินค้าได้ค่าตอบแทนแรก</h3>
+              <p className="text-slate-600">ทำภารกิจ “รีวิวซื่อสัตย์” ผ่านเกณฑ์ ตรวจสอบโดยทีมและผู้ใช้จริง</p>
+            </Card>
+          </div>
+        </div>
+      </section>
 
-      async function imageFileToPdf(file) {
-        const dataUrl = await new Promise((res, rej) => {
-          const fr = new FileReader();
-          fr.onload = () => res(fr.result);
-          fr.onerror = rej;
-          fr.readAsDataURL(file);
-        });
-        return await new Promise((res, rej) => {
-          const img = new Image();
-          img.onload = async () => {
-            const landscape = img.width >= img.height;
-            const pdf = new jsPDF({ orientation: landscape ? "l" : "p", unit: "pt", format: "a4" });
-            await ensureCustomFont(pdf);
-            const margin = 36;
-            const pageW = pdf.internal.pageSize.getWidth();
-            const pageH = pdf.internal.pageSize.getHeight();
-            const scale = Math.min((pageW - margin * 2) / img.width, (pageH - margin * 2) / img.height);
-            const w = img.width * scale;
-            const h = img.height * scale;
-            const x = (pageW - w) / 2;
-            const y = (pageH - h) / 2;
-            pdf.addImage(dataUrl, file.type.includes("png") ? "PNG" : "JPEG", x, y, w, h);
-            const blob = pdf.output("blob");
-            res({ name: file.name.replace(/\.[^.]+$/, "") + ".pdf", blob, size: blob.size });
-          };
-          img.onerror = rej;
-          img.src = dataUrl;
-        });
-      }
+      {/* Family */}
+      <section id="family" className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>สำหรับลูกหลาน</SectionTitle>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <h3 className="mb-2 text-xl font-extrabold">เริ่มอย่างไร</h3>
+              <ol className="list-decimal space-y-1 pl-5 text-slate-700">
+                <li>สมัครบัญชีให้ผู้สูงวัยด้วยเบอร์โทร</li>
+                <li>เปิดโหมดผู้เริ่มต้น และปรับขนาดตัวอักษร</li>
+                <li>ส่งคอร์สแรก “ใช้งานมือถืออย่างปลอดภัย”</li>
+              </ol>
+            </Card>
+            <Card>
+              <h3 className="mb-2 text-xl font-extrabold">การชำระเงินที่ปลอดภัย</h3>
+              <p className="text-slate-600">รองรับ PromptPay โอนผ่านธนาคาร และเก็บเงินปลายทางสำหรับสินค้าบางรายการ</p>
+            </Card>
+          </div>
+        </div>
+      </section>
 
-      async function textFileToPdf(file) {
-        const text = await file.text();
-        const pdf = new jsPDF({ unit: "pt", format: "a4" });
-        await ensureCustomFont(pdf);
-        const marginX = 40; const marginY = 56; const line = 18; const fontSize = 12;
-        pdf.setFontSize(fontSize);
-        const pageW = pdf.internal.pageSize.getWidth();
-        const pageH = pdf.internal.pageSize.getHeight();
-        const maxW = pageW - marginX * 2;
+      {/* FAQ */}
+      <section id="faq" className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>คำถามที่พบบ่อย</SectionTitle>
+          <div className="space-y-3">
+            <details className="rounded-2xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer font-extrabold">ถ้าอ่านยากมาก ทำอย่างไร</summary>
+              <p className="pt-2 text-slate-600">เลื่อน “ขนาดตัวอักษร” ที่มุมขวาบน หรือกด “คอนทราสต์สูง” เพื่อสีที่ชัดขึ้น</p>
+            </details>
+            <details className="rounded-2xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer font-extrabold">ถ้าอยากให้เว็บอ่านให้ฟัง</summary>
+              <p className="pt-2 text-slate-600">กดปุ่ม “อ่านหน้านี้” ระบบจะอ่านหัวข้อและคำบรรยายหลักให้ฟัง</p>
+            </details>
+            <details className="rounded-2xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer font-extrabold">เว็บนี้ปลอดภัยไหม</summary>
+              <p className="pt-2 text-slate-600">เราใช้ HTTPS และแสดงข้อมูลผู้ติดต่อชัดเจน หากไม่มั่นใจ เลือกชำระแบบ PromptPay หรือให้ลูกหลานช่วย</p>
+            </details>
+          </div>
+        </div>
+      </section>
 
-        const clean = text
-          .replace(/\r\n?/g, "\n")
-          .replace(/^# (.*)$/gm, "$1\n".toUpperCase())
-          .replace(/^## (.*)$/gm, "$1\n")
-          .replace(/^[-*] /gm, "• ");
+      {/* Help */}
+      <section id="help" className="py-8">
+        <div className="mx-auto max-w-6xl px-4">
+          <SectionTitle>ต้องการความช่วยเหลือ</SectionTitle>
+          <p className="text-slate-600">โทร 02-000-0000 ทุกวัน 9:00–18:00 หรือแอดไลน์ @graninfluencer</p>
+        </div>
+      </section>
 
-        const paragraphs = clean.split(/\n\n+/);
-        let y = marginY;
-        for (const p of paragraphs) {
-          const lines = pdf.splitTextToSize(p, maxW);
-          for (const ln of lines) {
-            if (y + line > pageH - marginY) { pdf.addPage(); y = marginY; }
-            pdf.text(ln, marginX, y);
-            y += line;
-          }
-          y += Math.round(line * 0.5);
-          if (y > pageH - marginY) { pdf.addPage(); y = marginY; }
-        }
-
-        const blob = pdf.output("blob");
-        return { name: file.name.replace(/\.[^.]+$/, "") + ".pdf", blob, size: blob.size };
-      }
-
-      async function passthroughPdf(file) {
-        const buf = await file.arrayBuffer();
-        return { name: file.name, blob: new Blob([buf], { type: "application/pdf" }), size: file.size };
-      }
-
-      function detectKind(file) {
-        const ext = (file.name.split(".").pop() || "").toLowerCase();
-        if (file.type === "application/pdf" || ext === "pdf") return "pdf";
-        if (file.type.startsWith("image/") || ["png","jpg","jpeg","webp","bmp"].includes(ext)) return "image";
-        if (file.type.startsWith("text/") || ["txt","md","csv","log","html","htm"].includes(ext)) return "text";
-        return "unsupported";
-      }
-
-      async function convertOne(file) {
-        const kind = detectKind(file);
-        switch (kind) {
-          case "pdf": return await passthroughPdf(file);
-          case "image": return await imageFileToPdf(file);
-          case "text": return await textFileToPdf(file);
-          default:
-            throw new Error("ไฟล์ชนิดนี้ยังไม่รองรับแบบออฟไลน์ (เช่น DOCX/XLSX/PPTX)");
-        }
-      }
-
-      async function handleConvertSelected() {
-        if (!files.length) { pushLog("ยังไม่ได้เลือกไฟล์"); return; }
-        setBusy(true);
-        try {
-          const out = [];
-          for (const f of files) {
-            try {
-              pushLog(\`กำลังแปลง: \${f.name}\`);
-              const r = await convertOne(f);
-              out.push(r);
-            } catch (e) {
-              pushLog(\`แปลงไม่ได้: \${f.name} → \${e?.message || e}\`);
-            }
-          }
-          setConverted(prev => [...prev, ...out]);
-          pushLog(\`เสร็จแล้ว: แปลงสำเร็จ \${out.length} ไฟล์\`);
-        } finally {
-          setBusy(false);
-        }
-      }
-
-      function addConvertedToMerge(idx) {
-        setMergeList(prev => [...prev, { type: "converted", idx }]);
-      }
-
-      function addUploadedPdfToMerge() {
-        const items = files
-          .map((f, i) => ({ f, i }))
-          .filter(x => detectKind(x.f) === "pdf");
-        if (!items.length) { pushLog("ไม่มี PDF จากรายการไฟล์อัปโหลด"); return; }
-        setMergeList(prev => [
-          ...prev,
-          ...items.map(x => ({ type: "uploaded", fileIndex: x.i }))
-        ]);
-      }
-
-      function removeFromMerge(i) {
-        setMergeList(prev => prev.filter((_, idx) => idx !== i));
-      }
-
-      function moveMerge(i, dir) {
-        setMergeList(prev => {
-          const arr = prev.slice();
-          const j = i + dir;
-          if (j < 0 || j >= arr.length) return prev;
-          const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
-          return arr;
-        });
-      }
-
-      async function buildMergePdf() {
-        if (!mergeList.length) { pushLog("ยังไม่ได้เลือกรายการสำหรับรวม"); return; }
-        setBusy(true);
-        try {
-          const out = await PDFDocument.create();
-          for (const item of mergeList) {
-            let srcBytes;
-            if (item.type === "converted") {
-              const obj = converted[item.idx];
-              srcBytes = new Uint8Array(await obj.blob.arrayBuffer());
-            } else if (item.type === "uploaded") {
-              const f = files[item.fileIndex];
-              srcBytes = new Uint8Array(await f.arrayBuffer());
-            }
-            const src = await PDFDocument.load(srcBytes);
-            const pages = await out.copyPages(src, src.getPageIndices());
-            pages.forEach(p => out.addPage(p));
-          }
-          const bytes = await out.save();
-          const blob = new Blob([bytes], { type: "application/pdf" });
-          downloadBlob(blob, \`merged_\${Date.now()}.pdf\`);
-          pushLog("รวม PDF เรียบร้อย");
-        } catch (e) {
-          pushLog(\`รวมไฟล์ล้มเหลว: \${e?.message || e}\`);
-        } finally {
-          setBusy(false);
-        }
-      }
-
-      const unsupportedList = useMemo(() => files.filter(f => detectKind(f) === "unsupported"), [files]);
-
-      return (
-        React.createElement("div", { className: "min-h-screen w-full" },
-          React.createElement("div", { className: "mx-auto max-w-6xl px-4 py-8" },
-            React.createElement("header", { className: "mb-6" },
-              React.createElement("h1", { className: "text-2xl sm:text-3xl font-bold tracking-tight" }, "ตัวช่วยแปลงไฟล์เป็น PDF + รวม PDF"),
-              React.createElement("p", { className: "text-sm text-slate-600 mt-1" }, "ทำงานทั้งหมดในเบราว์เซอร์ เครื่องคุณไม่ต้องอัปโหลดขึ้นเซิร์ฟเวอร์")
-            ),
-            React.createElement("section", { className: "grid lg:grid-cols-3 gap-6 mb-8" },
-              React.createElement("div", { className: "lg:col-span-2" },
-                React.createElement("div", {
-                  onDragOver: prevent, onDragEnter: prevent, onDrop: onDrop,
-                  className: "border-2 border-dashed border-slate-300 rounded-2xl p-6 bg-white shadow-sm"
-                },
-                  React.createElement("p", { className: "font-medium" }, "ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์"),
-                  React.createElement("p", { className: "text-xs text-slate-500" }, "รองรับ: PDF, รูปภาพ (PNG/JPG/WEBP), ข้อความ (TXT/MD/CSV/LOG/HTML เป็นข้อความธรรมดา)"),
-                  React.createElement("div", { className: "mt-4 flex items-center gap-3" },
-                    React.createElement("input", { id: "file", type: "file", multiple: true, accept: ACCEPT, onChange: onPickFiles,
-                      className: "block w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" }),
-                    React.createElement("button", { onClick: clearFiles, className: "px-3 py-2 text-sm rounded-xl bg-slate-100 hover:bg-slate-200" }, "ล้างรายการ")
-                  ),
-                  unsupportedList.length > 0 && React.createElement("div", { className: "mt-3 text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm" },
-                    "พบไฟล์ที่ยังไม่รองรับแบบออฟไลน์: ",
-                    unsupportedList.map(f => f.name).join(", "),
-                    ".\nไฟล์ตระกูลเอกสารสำนักงาน (DOCX/XLSX/PPTX) ต้องใช้บริการฝั่งเซิร์ฟเวอร์หรือแปลงเป็น PDF ก่อนแล้วค่อยอัปโหลดมารวมค่ะ/ครับ"
-                  )
-                ),
-                React.createElement("div", { className: "mt-4 bg-white border rounded-2xl shadow-sm" },
-                  React.createElement("div", { className: "px-4 py-2 border-b flex items-center justify-between" },
-                    React.createElement("h2", { className: "font-semibold" }, \`ไฟล์ที่เลือก (\${files.length})\`),
-                    React.createElement("div", { className: "flex gap-2" },
-                      React.createElement("button", { onClick: handleConvertSelected, disabled: busy || files.length === 0,
-                        className: "px-3 py-2 text-sm rounded-xl bg-indigo-600 text-white disabled:opacity-40" }, "แปลงเป็น PDF"),
-                      React.createElement("button", { onClick: addUploadedPdfToMerge, disabled: busy,
-                        className: "px-3 py-2 text-sm rounded-xl bg-emerald-600 text-white disabled:opacity-40" }, "เพิ่ม PDF ที่อัปโหลดเข้า Merge")
-                    )
-                  ),
-                  React.createElement("ul", { className: "divide-y max-h-60 overflow-auto" },
-                    files.length === 0
-                      ? React.createElement("li", { className: "px-4 py-8 text-center text-slate-400 text-sm" }, "ยังไม่มีไฟล์")
-                      : files.map((f, i) => React.createElement("li", { key: i, className: "px-4 py-2 flex items-center justify-between" },
-                          React.createElement("div", null,
-                            React.createElement("div", { className: "font-medium" }, f.name),
-                            React.createElement("div", { className: "text-xs text-slate-500" }, (f.type || "unknown") + " • " + niceBytes(f.size))
-                          ),
-                          React.createElement("div", { className: "flex items-center gap-2" },
-                            React.createElement("span", { className: "text-[10px] px-2 py-1 rounded-full bg-slate-100" }, detectKind(f)),
-                            React.createElement("button", { onClick: () => removeFile(i), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ลบ")
-                          )
-                        ))
-                  )
-                ),
-                React.createElement("div", { className: "mt-4 bg-white border rounded-2xl shadow-sm p-4" },
-                  React.createElement("div", { className: "flex items-center justify-between gap-3 flex-wrap" },
-                    React.createElement("div", null,
-                      React.createElement("div", { className: "font-semibold" }, "ฟอนต์ภาษาไทย (ตัวเลือก)"),
-                      React.createElement("p", { className: "text-xs text-slate-500" }, "หากไฟล์ข้อความมีภาษาไทย ให้เลือกไฟล์ฟอนต์ .ttf หรือ .otf เพื่อให้ PDF แสดงผลถูกต้อง")
-                    ),
-                    React.createElement("div", { className: "flex items-center gap-2" },
-                      React.createElement("input", { type: "file", accept: ".ttf,.otf", onChange: e => setFontFile(e.target.files?.[0] || null) })
-                    )
-                  ),
-                  fontFile && React.createElement("div", { className: "mt-2 text-xs text-slate-600" }, "ใช้ฟอนต์: ",
-                    React.createElement("span", { className: "font-medium" }, fontFile.name)
-                  )
-                )
-              ),
-              React.createElement("div", { className: "space-y-6" },
-                React.createElement("div", { className: "bg-white border rounded-2xl shadow-sm" },
-                  React.createElement("div", { className: "px-4 py-2 border-b flex items-center justify-between" },
-                    React.createElement("h2", { className: "font-semibold" }, \`ไฟล์ที่แปลงเสร็จ (\${converted.length})\`),
-                    React.createElement("button", { onClick: clearConverted, className: "px-3 py-2 text-sm rounded-xl bg-slate-100 hover:bg-slate-200" }, "ล้าง")
-                  ),
-                  React.createElement("ul", { className: "divide-y max-h-64 overflow-auto" },
-                    converted.length === 0
-                      ? React.createElement("li", { className: "px-4 py-8 text-center text-slate-400 text-sm" }, "ยังไม่มีไฟล์ที่แปลง")
-                      : converted.map((c, i) => React.createElement("li", { key: i, className: "px-4 py-2 flex items-center justify-between" },
-                          React.createElement("div", null,
-                            React.createElement("div", { className: "font-medium" }, c.name),
-                            React.createElement("div", { className: "text-xs text-slate-500" }, niceBytes(c.size))
-                          ),
-                          React.createElement("div", { className: "flex items-center gap-2" },
-                            React.createElement("button", { onClick: () => downloadBlob(c.blob, c.name), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ดาวน์โหลด"),
-                            React.createElement("button", { onClick: () => addConvertedToMerge(i), className: "px-2 py-1 text-xs rounded-lg bg-emerald-600 text-white" }, "เพิ่มเข้า Merge")
-                          )
-                        ))
-                  )
-                ),
-                React.createElement("div", { className: "bg-white border rounded-2xl shadow-sm" },
-                  React.createElement("div", { className: "px-4 py-2 border-b flex items-center justify-between" },
-                    React.createElement("h2", { className: "font-semibold" }, \`คิวรวม PDF (\${mergeList.length})\`),
-                    React.createElement("button", { onClick: buildMergePdf, disabled: busy || mergeList.length === 0,
-                      className: "px-3 py-2 text-sm rounded-xl bg-emerald-600 text-white disabled:opacity-40" }, "รวมและดาวน์โหลด")
-                  ),
-                  React.createElement("ul", { className: "divide-y max-h-64 overflow-auto" },
-                    mergeList.length === 0
-                      ? React.createElement("li", { className: "px-4 py-8 text-center text-slate-400 text-sm" }, "ยังไม่มีไฟล์ในคิวรวม")
-                      : mergeList.map((m, i) => {
-                          let label = "";
-                          if (m.type === "converted") label = converted[m.idx]?.name || "[แปลงแล้วหาย]";
-                          else if (m.type === "uploaded") label = files[m.fileIndex]?.name || "[ไฟล์หาย]";
-                          return React.createElement("li", { key: i, className: "px-4 py-2 flex items-center justify-between" },
-                            React.createElement("div", null,
-                              React.createElement("div", { className: "font-medium" }, label),
-                              React.createElement("div", { className: "text-xs text-slate-500" }, m.type)
-                            ),
-                            React.createElement("div", { className: "flex items-center gap-2" },
-                              React.createElement("button", { onClick: () => moveMerge(i, -1), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ขึ้น"),
-                              React.createElement("button", { onClick: () => moveMerge(i, 1), className: "px-2 py-1 text-xs rounded-lg bg-slate-100 hover:bg-slate-200" }, "ลง"),
-                              React.createElement("button", { onClick: () => removeFromMerge(i), className: "px-2 py-1 text-xs rounded-lg bg-rose-100 hover:bg-rose-200" }, "ลบ")
-                            )
-                          );
-                        })
-                  )
-                ),
-                React.createElement("div", { className: "bg-white border rounded-2xl shadow-sm p-4 text-xs text-slate-600" },
-                  React.createElement("div", { className: "font-semibold mb-1" }, "บันทึกสถานะ"),
-                  React.createElement("ul", { className: "space-y-1 max-h-40 overflow-auto" },
-                    log.length === 0
-                      ? React.createElement("li", { className: "text-slate-400" }, "ไม่มีข้อความ")
-                      : log.map((l, i) => React.createElement("li", { key: i, className: "leading-4" }, "• ", l))
-                  )
-                )
-              )
-            ),
-            React.createElement("section", { className: "mt-4 text-xs text-slate-500 space-y-2" },
-              React.createElement("p", null, "คำแนะนำ: ถ้าต้องการแปลงไฟล์เอกสารตระกูลออฟฟิศ (DOCX/XLSX/PPTX) ให้แปลงเป็น PDF จากโปรแกรมต้นทางก่อน หรือเพิ่มระบบฝั่งเซิร์ฟเวอร์เพื่อนำไปแปลงแล้วค่อยส่งกลับมาที่หน้านี้"),
-              React.createElement("details", { className: "bg-slate-100 rounded-xl p-3" },
-                React.createElement("summary", { className: "cursor-pointer font-medium" }, "ตัวอย่างแนวทางฝั่งเซิร์ฟเวอร์เพื่อแปลง DOCX/XLSX/PPTX → PDF"),
-                React.createElement("pre", { className: "mt-2 whitespace-pre-wrap text-[10px]" }, `# แนวคิดย่อ: ใช้ LibreOffice (soffice) ใน Docker หรือเครื่องเซิร์ฟเวอร์เพื่อแปลง แล้วให้ API ส่งไฟล์ PDF กลับมา
-# ตัวอย่างสคริปต์ Node.js ด้วย child_process (pseudo):
-
-import express from 'express';
-import multer from 'multer';
-import { execFile } from 'child_process';
-import fs from 'fs/promises';
-
-const app = express();
-const upload = multer({ dest: 'uploads/' });
-
-app.post('/convert', upload.single('file'), async (req, res) => {
-  try {
-    const src = req.file.path;
-    const outDir = 'converted';
-    await fs.mkdir(outDir, { recursive: true });
-    await new Promise((resolve, reject) => {
-      execFile('soffice', ['--headless','--convert-to','pdf','--outdir', outDir, src], (err) => err ? reject(err) : resolve());
-    });
-    const outPath = src.replace('uploads', 'converted') + '.pdf'; // หรือหาจากชื่อจริง
-    const pdf = await fs.readFile(outPath);
-    res.setHeader('Content-Type','application/pdf');
-    res.send(pdf);
-  } catch(e) { res.status(500).send(String(e)); }
-});
-
-app.listen(3000);`)
-              )
-            )
-          )
-        )
-      );
-    }
-
-    const root = createRoot(document.getElementById("root"));
-    root.render(React.createElement(App));
-  </script>
-</body>
-</html>
+      {/* Footer */}
+      <footer className={(hc ? "bg-slate-950" : "bg-slate-50") + " border-t border-slate-200"}>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-slate-600">
+          <p>© {year} Graninfluencer — สร้างพื้นที่ปลอดภัยสำหรับผู้สูงวัย</p>
+          <ul className="flex list-none gap-3">
+            <li>PromptPay</li>
+            <li>โอนผ่านธนาคาร</li>
+            <li>เก็บเงินปลายทาง</li>
+          </ul>
+        </div>
+      </footer>
+    </div>
+  );
+}
